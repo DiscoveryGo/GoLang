@@ -1,7 +1,7 @@
 package main
 
 import (
-	"csvlib"
+	"./csvlib"
 	"encoding/gob"
 	"fmt"
 	"log"
