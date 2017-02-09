@@ -1,5 +1,5 @@
 // CSVProcessor
-package csvlib
+package scenarioParser
 
 import (
 	"bytes"
