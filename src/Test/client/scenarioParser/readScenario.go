@@ -12,10 +12,10 @@ import (
 )
 
 type Airthreat struct {
-	ID        int64
-	PositionX float64
-	PositionY float64
-	PositionZ float64
+	ID        int
+	PositionX int
+	PositionY int
+	PositionZ int
 }
 
 func ReadScenarioFile() []Airthreat {
@@ -37,10 +37,10 @@ func ReadScenarioFile() []Airthreat {
 			log.Fatal(err)
 		}
 
-		_id, _ := strconv.ParseInt(threat[0], 0, 64)
-		_posX, _ := strconv.ParseFloat(threat[1], 64)
-		_posY, _ := strconv.ParseFloat(threat[2], 64)
-		_posZ, _ := strconv.ParseFloat(threat[3], 64)
+		_id, _ := strconv.Atoi(threat[0])
+		_posX, _ := strconv.Atoi(threat[1])
+		_posY, _ := strconv.Atoi(threat[2])
+		_posZ, _ := strconv.Atoi(threat[3])
 
 		airthreats = append(airthreats, Airthreat{ID: _id, PositionX: _posX, PositionY: _posY, PositionZ: _posZ})
 	}
