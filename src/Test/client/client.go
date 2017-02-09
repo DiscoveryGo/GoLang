@@ -1,14 +1,14 @@
 package main
 
 import (
-	"./csvlib"
+	"./scenarioParser"
 	"encoding/gob"
 	"fmt"
 	"log"
 	"net"
 )
 
-func sendSimulationData(airthreats []csvlib.Airthreat, conn net.Conn) {
+func sendSimulationData(airthreats []scenarioParser.Airthreat, conn net.Conn) {
 	enc := gob.NewEncoder(conn)
 	if err := enc.Encode(airthreats); err != nil {
 		fmt.Println(err)
@@ -33,6 +33,6 @@ func connectServer() (conn net.Conn) {
 
 func main() {
 
-	airthreats := csvlib.ReadScenarioFile()
+	airthreats := scenarioParser.ReadScenarioFile()
 	sendSimulationData(airthreats, connectServer())
 }
