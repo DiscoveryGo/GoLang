@@ -6,18 +6,20 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"runtime"
+	"sync"
 )
 
-func sendSimulationData(airthreats []scenarioParser.Airthreat, conn net.Conn) {
+func sendSimulationData(airthreat scenarioParser.Airthreat, conn net.Conn) {
 	enc := gob.NewEncoder(conn)
-	if err := enc.Encode(airthreats); err != nil {
+	if err := enc.Encode(airthreat); err != nil {
 		fmt.Println(err)
 		return
 	}
 
 	fmt.Println("데이터 전송 완료")
 
-	defer conn.Close()
+	//defer conn.Close()
 }
 
 func connectServer() (conn net.Conn) {
@@ -32,7 +34,41 @@ func connectServer() (conn net.Conn) {
 }
 
 func main() {
-
 	airthreats := scenarioParser.ReadScenarioFile()
-	sendSimulationData(airthreats, connectServer())
+	conn := connectServer()
+
+	runtime.GOMAXPROCS(1)
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	fmt.Println("goroutine go !")
+
+	//	air 1 go
+	go func() {
+		defer wg.Done()
+
+		for airthreats[0].PositionX < 1000 {
+			airthreats[0].PositionX += 100
+
+			sendSimulationData(airthreats[0], conn)
+			fmt.Println(airthreats[0])
+		}
+	}()
+
+	//	air 2 go
+	go func() {
+		defer wg.Done()
+
+		for airthreats[1].PositionX < 1000 {
+			airthreats[1].PositionX += 50
+
+			sendSimulationData(airthreats[1], conn)
+			fmt.Println(airthreats[1])
+		}
+	}()
+
+	fmt.Println("waiting ...")
+	wg.Wait()
+
+	defer conn.Close()
 }
