@@ -8,6 +8,7 @@ import (
 	"net"
 	"runtime"
 	"sync"
+	"time"
 )
 
 func sendSimulationData(airthreat scenarioParser.Airthreat, conn net.Conn) {
@@ -18,8 +19,6 @@ func sendSimulationData(airthreat scenarioParser.Airthreat, conn net.Conn) {
 	}
 
 	fmt.Println("데이터 전송 완료")
-
-	//defer conn.Close()
 }
 
 func connectServer() (conn net.Conn) {
@@ -47,11 +46,17 @@ func main() {
 	go func() {
 		defer wg.Done()
 
-		for airthreats[0].PositionX < 1000 {
-			airthreats[0].PositionX += 100
+		ticker := time.NewTicker(time.Millisecond * 100)
 
-			sendSimulationData(airthreats[0], conn)
-			fmt.Println(airthreats[0])
+		for tick := range ticker.C {
+			if airthreats[0].PositionX < 5000 {
+				airthreats[0].PositionX += 100
+				sendSimulationData(airthreats[0], conn)
+				fmt.Println(airthreats[0], tick)
+			} else {
+				ticker.Stop()
+				break
+			}
 		}
 	}()
 
@@ -59,11 +64,17 @@ func main() {
 	go func() {
 		defer wg.Done()
 
-		for airthreats[1].PositionX < 1000 {
-			airthreats[1].PositionX += 50
+		ticker := time.NewTicker(time.Millisecond * 100)
 
-			sendSimulationData(airthreats[1], conn)
-			fmt.Println(airthreats[1])
+		for tick := range ticker.C {
+			if airthreats[1].PositionX < 5000 {
+				airthreats[1].PositionX += 50
+				sendSimulationData(airthreats[1], conn)
+				fmt.Println(airthreats[1], tick)
+			} else {
+				ticker.Stop()
+				break
+			}
 		}
 	}()
 
