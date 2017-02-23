@@ -78,7 +78,7 @@ func main() {
 	go func() {
 		defer wg.Done()
 
-		ticker := time.NewTicker(time.Millisecond * 100)
+		ticker := time.NewTicker(time.Nanosecond * 100)
 		overRange := false
 
 		for tick := range ticker.C {
