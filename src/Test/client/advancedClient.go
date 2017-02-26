@@ -139,6 +139,26 @@ func SendData(airthreat AirthreatModel, conn net.Conn) {
 	fmt.Println("데이터 전송 완료")
 }
 
+//	todo refactoring
+func objectUpdate(airthreats []AirthreatModel, conn net.Conn) {
+	defer wg.Done()
+
+	ticker := time.NewTicker(time.Nanosecond * 100)		//	not apply really. need to know ticker spec
+	defer ticker.Stop()
+
+	for tick := range ticker.C {
+		_ = tick 	//	not use
+
+		for i := 0; i < len(airthreats); i++ {
+			if UpdateData(&airthreats[i]) == true {
+				SendData(airthreats[i], conn)	
+			} else {
+				return
+			}
+		}
+	}
+}
+
 
 /*	Simulation Definition
 
@@ -148,9 +168,12 @@ func SendData(airthreat AirthreatModel, conn net.Conn) {
 	model data send to server
 */
 
+//	global variable. any idea?
+var wg sync.WaitGroup
+
+
 func main() {
 	runtime.GOMAXPROCS(1)
-	var wg sync.WaitGroup
 	wg.Add(1)
 
 	conn := Connect()
@@ -163,24 +186,7 @@ func main() {
 
 	fmt.Println("goroutine go !")
 
-	go func() {
-		defer wg.Done()
-
-		ticker := time.NewTicker(time.Nanosecond * 100)		//	not apply really. need to know ticker spec
-		defer ticker.Stop()
-
-		for tick := range ticker.C {
-			_ = tick 	//	not use
-
-			for i := 0; i < len(airthreats); i++ {
-				if UpdateData(&airthreats[i]) == true {
-					SendData(airthreats[i], conn)	
-				} else {
-					return
-				}
-			}
-		}
-	}()
+	go objectUpdate(airthreats, conn)
 
 	fmt.Println("waiting ...")
 	wg.Wait()
