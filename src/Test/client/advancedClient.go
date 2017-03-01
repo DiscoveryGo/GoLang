@@ -48,110 +48,105 @@ type Model struct {
 /*
 	user type
 */
+type AirthreatSimulator struct {
+	threats []Model
 
-type AirthreatModel struct {
-	Model
-	//	speicial air attribute
+	//	thinking issue
+	conn net.Conn 	
+	wg sync.WaitGroup
 }
 
-
-//	simulation using interface definition
+//	todo	simulation using interface definition
 
 /*
-	common interface
+	AirthreatModel interface implementaion ==> custom implementation
 */
 
-type Parser interface {
-	Parse()		//	raw data in and out to model current data
-}
+//	todo	if scn reloaded, need to reset []Model
+func (ats *AirthreatSimulator) readScenario() {
+	scenario := scenarioParser.ReadScenarioFile()
+	temp := make([]Model, len(scenario))
+	ats.threats = append(temp)
 
-type Modeler interface {
-	Update() bool	//	current state data to next state data	
-}
-
-
-/*
-	AirthreatModel implementaion
-*/
-
-//	todo	need to efficient(read with csv item nums). lazy imp for velocity
-func (airthreat *AirthreatModel) Parse() {
-	rawData := scenarioParser.ReadScenarioFile()
-
-	for _, data := range rawData {
-		if airthreat.ID == data.ID {
-			airthreat.PosX = data.PositionX
-			airthreat.PosY = data.PositionY
-			airthreat.PosZ = data.PositionZ
-		}
+	for i, objectData := range scenario {
+		ats.threats[i].ID = objectData.ID
+		ats.threats[i].PosX = objectData.PositionX
+		ats.threats[i].PosY = objectData.PositionY
+		ats.threats[i].PosZ = objectData.PositionZ
 	}
 }
 
-func (airthreat *AirthreatModel) Update() bool {
-	airthreat.PosX += 50
-	airthreat.PosY += 75
-	airthreat.PosZ += 100
+func (ats *AirthreatSimulator) simulationStart() {
+	runtime.GOMAXPROCS(1)
+	ats.wg.Add(1)
 
+	fmt.Println("goroutine go !")
+	go ats.objectUpdate()
+
+	fmt.Println("waiting ...")
+	ats.wg.Wait()
+}
+
+func (ats *AirthreatSimulator) update() bool {
 	isSuccess := true
 
-	if airthreat.PosX > 1000 {
-		isSuccess = false
+	for i := 0; i < len(ats.threats); i++ {
+		ats.threats[i].PosX += 50
+		ats.threats[i].PosY += 75
+		ats.threats[i].PosZ += 100
+
+		if ats.threats[i].PosX > 1000 {
+			isSuccess = false
+			fmt.Printf("ats %d's x position is over 1000\n", i)
+		}
 	}
 
 	return isSuccess
 }
 
-func Connect() net.Conn {
-	conn, err := net.Dial("tcp", "127.0.0.1:8000")
-	if err != nil {
-	 	log.Println("서버에 연결할 수 없습니다.")
-	 }
-
-	fmt.Println("서버에 연결되었습니다.")
-
-	return conn
-}
-
-
-//	wrapper
-func DataParse(p Parser) {
-	p.Parse()
-}
-
-func UpdateData(m Modeler) bool {
-	if m.Update() != true {
-		return false
-	}
-
-	return true
-}
-
-//	I want to do with interface..
-func SendData(airthreat AirthreatModel, conn net.Conn) {
-	data := scenarioParser.Airthreat{airthreat.ID, airthreat.PosX, airthreat.PosY, airthreat.PosZ}	
-
-	enc := gob.NewEncoder(conn)
-	if err := enc.Encode(data); err != nil {
-		fmt.Println(err)
+func (ats *AirthreatSimulator) connectTCPServer() {
+	if ats.conn != nil {
+		fmt.Println("서버와 이미 연결된 상태입니다.")
 		return
 	}
 
-	fmt.Println("데이터 전송 완료")
+	conn, err := net.Dial("tcp", "127.0.0.1:8000")
+	if err != nil {
+	 	log.Println("서버에 연결할 수 없습니다.", err)
+	 } else {
+	 	fmt.Println("서버에 연결되었습니다.")
+		ats.conn = conn
+	 }
 }
 
-//	todo refactoring
-func objectUpdate(airthreats []AirthreatModel, conn net.Conn) {
-	defer wg.Done()
+// //	I want to do with interface..
+func (ats *AirthreatSimulator) sendData() {
+	for _, threat := range ats.threats {
+		data := scenarioParser.Airthreat{threat.ID, threat.PosX, threat.PosY, threat.PosZ}
+		enc := gob.NewEncoder(ats.conn)
 
-	ticker := time.NewTicker(time.Nanosecond * 100)		//	not apply really. need to know ticker spec
+		if err := enc.Encode(data); err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		fmt.Println("데이터 전송 완료")
+	}
+}
+
+
+func (ats *AirthreatSimulator) objectUpdate() {
+	defer ats.wg.Done()
+
+	ticker := time.NewTicker(time.Millisecond * 100)		//	not apply really. need to know ticker spec
 	defer ticker.Stop()
 
 	for tick := range ticker.C {
 		_ = tick 	//	not use
 
-		for i := 0; i < len(airthreats); i++ {
-			if UpdateData(&airthreats[i]) == true {
-				SendData(airthreats[i], conn)	
+		for i := 0; i < len(ats.threats); i++ {
+			if ats.update() == true {
+				ats.sendData()	
 			} else {
 				return
 			}
@@ -160,36 +155,30 @@ func objectUpdate(airthreats []AirthreatModel, conn net.Conn) {
 }
 
 
-/*	Simulation Definition
-
-	Read scenario raw data <- using 'go' read IO interface
-	Parse read data
-	update model
-	model data send to server
-*/
-
-//	global variable. any idea?
-var wg sync.WaitGroup
-
-
 func main() {
-	runtime.GOMAXPROCS(1)
-	wg.Add(1)
+	ats := &AirthreatSimulator{}
+	var userCommand string
 
-	conn := Connect()
-	airthreats := make([]AirthreatModel, 2)
+	for userCommand != "3" {
+		fmt.Println("\n[simulation client menu]")
+		fmt.Println("1. connect server")
+		fmt.Println("2. simulation start")
+		fmt.Println("3. quit")
+		fmt.Printf("input command : ")
+		fmt.Scan(&userCommand)
 
-	for i := 0; i < len(airthreats); i++ {
-		airthreats[i].ID = i + 1
-		DataParse(&airthreats[i])
+		switch userCommand {
+			case "1":
+				ats.connectTCPServer()
+			case "2":
+				ats.readScenario()		//	initialize data by scenario
+				ats.simulationStart()	//	data update start
+			//	todo
+			//	disconnect by ICD message "bye"
+		}
 	}
 
-	fmt.Println("goroutine go !")
-
-	go objectUpdate(airthreats, conn)
-
-	fmt.Println("waiting ...")
-	wg.Wait()
-
-	defer conn.Close()
+	if ats.conn != nil {
+		ats.conn.Close()	
+	}
 }
