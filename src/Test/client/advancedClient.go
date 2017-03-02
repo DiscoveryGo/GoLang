@@ -76,6 +76,7 @@ func (ats *AirthreatSimulator) readScenario() {
 	}
 }
 
+
 func (ats *AirthreatSimulator) simulationStart() {
 	runtime.GOMAXPROCS(1)
 	ats.wg.Add(1)
@@ -86,6 +87,7 @@ func (ats *AirthreatSimulator) simulationStart() {
 	fmt.Println("waiting ...")
 	ats.wg.Wait()
 }
+
 
 func (ats *AirthreatSimulator) update() bool {
 	isSuccess := true
@@ -104,6 +106,7 @@ func (ats *AirthreatSimulator) update() bool {
 	return isSuccess
 }
 
+
 func (ats *AirthreatSimulator) connectTCPServer() {
 	if ats.conn != nil {
 		fmt.Println("서버와 이미 연결된 상태입니다.")
@@ -118,6 +121,12 @@ func (ats *AirthreatSimulator) connectTCPServer() {
 		ats.conn = conn
 	 }
 }
+
+
+func (ats *AirthreatSimulator) disconnectTCPServer() {
+	ats.conn.Write([]byte("bye bye"))
+}
+
 
 // //	I want to do with interface..
 func (ats *AirthreatSimulator) sendData() {
@@ -155,15 +164,17 @@ func (ats *AirthreatSimulator) objectUpdate() {
 }
 
 
+
 func main() {
 	ats := &AirthreatSimulator{}
 	var userCommand string
 
-	for userCommand != "3" {
+	for userCommand != "4" {
 		fmt.Println("\n[simulation client menu]")
 		fmt.Println("1. connect server")
 		fmt.Println("2. simulation start")
-		fmt.Println("3. quit")
+		fmt.Println("3. disconnect server")
+		fmt.Println("4. quit")
 		fmt.Printf("input command : ")
 		fmt.Scan(&userCommand)
 
@@ -173,8 +184,10 @@ func main() {
 			case "2":
 				ats.readScenario()		//	initialize data by scenario
 				ats.simulationStart()	//	data update start
-			//	todo
-			//	disconnect by ICD message "bye"
+
+			//	disconnect by ICD message "bye bye"
+			case "3":
+				ats.disconnectTCPServer()
 		}
 	}
 
