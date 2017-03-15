@@ -35,9 +35,10 @@ type PhysicalAttribute struct {
 }
 
 type LogicalAttribute struct {
-	Event []string
+	Event string
 	FriendsOrEnemy []string
 	ID int
+	Category int
 }
 
 type Model struct {
@@ -56,7 +57,25 @@ type AirthreatSimulator struct {
 	wg sync.WaitGroup
 }
 
+type ShipthreatSimulator struct {
+	threats []Model
+}
+
 //	todo	simulation using interface definition
+func foo(x interface{}) string {
+	switch x := x.(type) {
+	case nil:
+		return "NULL"
+	case AirthreatSimulator:
+		return "Air"
+	case ShipthreatSimulator:
+		return "Ship"
+	default:
+		panic(fmt.Sprintf("unexpected type %T: %v", x, x))	// x, x ???
+	}
+}
+
+
 
 /*
 	AirthreatModel interface implementaion ==> custom implementation
@@ -128,10 +147,29 @@ func (ats *AirthreatSimulator) disconnectTCPServer() {
 }
 
 
+//*******************************
+
+//	all information is belong to airthreat object
+func (ats *AirthreatSimulator) msgEncodingTest(msgType int) {
+	switch msgType {
+		case 1:
+			fmt.Println("air message encoding ...")
+			air := AirthreatSimulator{}
+			fmt.Println(foo(air))
+		case 2:
+			fmt.Println("ship message encoding ...")
+			ship := ShipthreatSimulator{}
+			fmt.Println(foo(ship))
+	}
+}
+
+//*******************************
+
+
 // //	I want to do with interface..
 func (ats *AirthreatSimulator) sendData() {
 	for _, threat := range ats.threats {
-		data := scenarioParser.Airthreat{threat.ID, threat.PosX, threat.PosY, threat.PosZ}
+		data := scenarioParser.Airthreat{1, threat.ID, threat.PosX, threat.PosY, threat.PosZ}
 		enc := gob.NewEncoder(ats.conn)
 
 		if err := enc.Encode(data); err != nil {
@@ -169,12 +207,13 @@ func main() {
 	ats := &AirthreatSimulator{}
 	var userCommand string
 
-	for userCommand != "4" {
+	for userCommand != "5" {
 		fmt.Println("\n[simulation client menu]")
 		fmt.Println("1. connect server")
 		fmt.Println("2. simulation start")
-		fmt.Println("3. disconnect server")
-		fmt.Println("4. quit")
+		fmt.Println("3. msg encoding test")
+		fmt.Println("4. disconnect server")
+		fmt.Println("5. quit")
 		fmt.Printf("input command : ")
 		fmt.Scan(&userCommand)
 
@@ -184,9 +223,15 @@ func main() {
 			case "2":
 				ats.readScenario()		//	initialize data by scenario
 				ats.simulationStart()	//	data update start
-
-			//	disconnect by ICD message "bye bye"
 			case "3":
+				msgType := 1	//	msg type 1:air, 2:ship
+				fmt.Println("[first air msg testing encoded]")
+				ats.msgEncodingTest(msgType)
+				msgType = 2	//	msg type 1:air, 2:ship
+				fmt.Println("[second ship msg testing encoded]")
+				ats.msgEncodingTest(msgType)
+
+			case "4":
 				ats.disconnectTCPServer()
 		}
 	}
