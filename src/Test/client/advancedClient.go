@@ -35,22 +35,32 @@ type PhysicalAttribute struct {
 }
 
 type LogicalAttribute struct {
-	Event string
-	FriendsOrEnemy []string
 	ID int
-	Category int
+	Category string
+	FriendsOrEnemy int
 }
 
-type Model struct {
+type SimulationModel struct {
 	PhysicalAttribute
 	LogicalAttribute
+}
+
+type SimulationEvent struct {
+	EventID int
+	EventMessage string
+}
+
+type CommunicationMessage struct {
+	OpCode int
+	ThreatModels []SimulationModel
+	Event SimulationEvent
 }
 
 /*
 	user type
 */
 type AirthreatSimulator struct {
-	threats []Model
+	ThreatModels []SimulationModel
 
 	//	thinking issue
 	conn net.Conn 	
@@ -58,45 +68,35 @@ type AirthreatSimulator struct {
 }
 
 type ShipthreatSimulator struct {
-	threats []Model
+	ThreatModels []SimulationModel
 }
-
-//	todo	simulation using interface definition
-func foo(x interface{}) string {
-	switch x := x.(type) {
-	case nil:
-		return "NULL"
-	case AirthreatSimulator:
-		return "Air"
-	case ShipthreatSimulator:
-		return "Ship"
-	default:
-		panic(fmt.Sprintf("unexpected type %T: %v", x, x))	// x, x ???
-	}
-}
-
 
 
 /*
 	AirthreatModel interface implementaion ==> custom implementation
 */
 
-//	todo	if scn reloaded, need to reset []Model
+//	Scenario Control
+//	todo: if scn reloaded, need to reset []SimulationModel
 func (ats *AirthreatSimulator) readScenario() {
 	scenario := scenarioParser.ReadScenarioFile()
-	temp := make([]Model, len(scenario))
-	ats.threats = append(temp)
+	temp := make([]SimulationModel, len(scenario))
+	ats.ThreatModels = append(temp)
 
 	for i, objectData := range scenario {
-		ats.threats[i].ID = objectData.ID
-		ats.threats[i].PosX = objectData.PositionX
-		ats.threats[i].PosY = objectData.PositionY
-		ats.threats[i].PosZ = objectData.PositionZ
+		ats.ThreatModels[i].ID = objectData.ID
+		ats.ThreatModels[i].PosX = objectData.PositionX
+		ats.ThreatModels[i].PosY = objectData.PositionY
+		ats.ThreatModels[i].PosZ = objectData.PositionZ
 	}
 }
 
 
+//	Simulation Control
+
 func (ats *AirthreatSimulator) simulationStart() {
+	ats.sendEvent(SimulationEvent{10001, "simulation start ..."})
+
 	runtime.GOMAXPROCS(1)
 	ats.wg.Add(1)
 
@@ -108,15 +108,20 @@ func (ats *AirthreatSimulator) simulationStart() {
 }
 
 
+func (ats *AirthreatSimulator) simulationStop() {
+	ats.sendEvent(SimulationEvent{10003, "simulation stop ..."})
+}
+
+
 func (ats *AirthreatSimulator) update() bool {
 	isSuccess := true
 
-	for i := 0; i < len(ats.threats); i++ {
-		ats.threats[i].PosX += 50
-		ats.threats[i].PosY += 75
-		ats.threats[i].PosZ += 100
+	for i := 0; i < len(ats.ThreatModels); i++ {
+		ats.ThreatModels[i].PosX += 50
+		ats.ThreatModels[i].PosY += 75
+		ats.ThreatModels[i].PosZ += 100
 
-		if ats.threats[i].PosX > 1000 {
+		if ats.ThreatModels[i].PosX > 1000 {
 			isSuccess = false
 			fmt.Printf("ats %d's x position is over 1000\n", i)
 		}
@@ -125,6 +130,57 @@ func (ats *AirthreatSimulator) update() bool {
 	return isSuccess
 }
 
+
+func (ats *AirthreatSimulator) objectUpdate() {
+	defer ats.wg.Done()
+
+	ticker := time.NewTicker(time.Millisecond * 500)		//	not apply really. need to know ticker spec
+	defer ticker.Stop()
+
+	for tick := range ticker.C {
+		_ = tick 	//	not use
+
+		for i := 0; i < len(ats.ThreatModels); i++ {
+			if ats.update() == true {
+				ats.sendData()	
+			} else {
+				return
+			}
+		}
+	}
+}
+
+
+
+//	simulator communication
+
+func (ats *AirthreatSimulator) sendEvent(event SimulationEvent) {
+	data := CommunicationMessage{100, []SimulationModel{}, SimulationEvent{event.EventID, event.EventMessage}}	//	100 is Opcode "threat event"
+	enc := gob.NewEncoder(ats.conn)
+	
+	if err := enc.Encode(data); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(data, "이벤트 전송 완료")
+}
+
+
+func (ats *AirthreatSimulator) sendData() {
+	data := CommunicationMessage{200,  ats.ThreatModels, SimulationEvent{}}	//	200 is Opcode "threat object data"
+	enc := gob.NewEncoder(ats.conn)
+	
+	if err := enc.Encode(data); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(data, "데이터 전송 완료")	
+}
+
+
+//	tcp Client Server control
 
 func (ats *AirthreatSimulator) connectTCPServer() {
 	if ats.conn != nil {
@@ -143,77 +199,23 @@ func (ats *AirthreatSimulator) connectTCPServer() {
 
 
 func (ats *AirthreatSimulator) disconnectTCPServer() {
-	ats.conn.Write([]byte("bye bye"))
+	ats.sendEvent(SimulationEvent{20001, "TCP client request discoonection"})
+	ats.conn.Close()
 }
-
-
-//*******************************
-
-//	all information is belong to airthreat object
-func (ats *AirthreatSimulator) msgEncodingTest(msgType int) {
-	switch msgType {
-		case 1:
-			fmt.Println("air message encoding ...")
-			air := AirthreatSimulator{}
-			fmt.Println(foo(air))
-		case 2:
-			fmt.Println("ship message encoding ...")
-			ship := ShipthreatSimulator{}
-			fmt.Println(foo(ship))
-	}
-}
-
-//*******************************
-
-
-// //	I want to do with interface..
-func (ats *AirthreatSimulator) sendData() {
-	for _, threat := range ats.threats {
-		data := scenarioParser.Airthreat{1, threat.ID, threat.PosX, threat.PosY, threat.PosZ}
-		enc := gob.NewEncoder(ats.conn)
-
-		if err := enc.Encode(data); err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		fmt.Println("데이터 전송 완료")
-	}
-}
-
-
-func (ats *AirthreatSimulator) objectUpdate() {
-	defer ats.wg.Done()
-
-	ticker := time.NewTicker(time.Millisecond * 100)		//	not apply really. need to know ticker spec
-	defer ticker.Stop()
-
-	for tick := range ticker.C {
-		_ = tick 	//	not use
-
-		for i := 0; i < len(ats.threats); i++ {
-			if ats.update() == true {
-				ats.sendData()	
-			} else {
-				return
-			}
-		}
-	}
-}
-
 
 
 func main() {
 	ats := &AirthreatSimulator{}
 	var userCommand string
 
-	for userCommand != "5" {
+	for userCommand != "6" {
 		fmt.Println("\n[simulation client menu]")
 		fmt.Println("1. connect server")
 		fmt.Println("2. simulation start")
-		fmt.Println("3. msg encoding test")
-		fmt.Println("4. disconnect server")
-		fmt.Println("5. quit")
+		fmt.Println("3. simulation event send")
+		fmt.Println("4. simulation stop")
+		fmt.Println("5. disconnect server")
+		fmt.Println("6. quit")
 		fmt.Printf("input command : ")
 		fmt.Scan(&userCommand)
 
@@ -224,14 +226,10 @@ func main() {
 				ats.readScenario()		//	initialize data by scenario
 				ats.simulationStart()	//	data update start
 			case "3":
-				msgType := 1	//	msg type 1:air, 2:ship
-				fmt.Println("[first air msg testing encoded]")
-				ats.msgEncodingTest(msgType)
-				msgType = 2	//	msg type 1:air, 2:ship
-				fmt.Println("[second ship msg testing encoded]")
-				ats.msgEncodingTest(msgType)
-
+				ats.sendEvent(SimulationEvent{10002, "event test"})
 			case "4":
+				ats.simulationStop()
+			case "5":
 				ats.disconnectTCPServer()
 		}
 	}
