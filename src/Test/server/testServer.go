@@ -69,9 +69,10 @@ func main() {
 		isConnected = true
 		conn = _conn
 	}
-
+	
+	dec := gob.NewDecoder(conn)
 	for {
-		dec := gob.NewDecoder(conn)
+		// dec := gob.NewDecoder(conn)
 		var msg CommunicationMessage
 
 		if err := dec.Decode(&msg); err != nil {

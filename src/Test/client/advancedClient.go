@@ -134,7 +134,7 @@ func (ats *AirthreatSimulator) update() bool {
 func (ats *AirthreatSimulator) objectUpdate() {
 	defer ats.wg.Done()
 
-	ticker := time.NewTicker(time.Millisecond * 500)		//	not apply really. need to know ticker spec
+	ticker := time.NewTicker(time.Millisecond * 500)		//	not work. gob: unkown type id or corrupted data
 	defer ticker.Stop()
 
 	for tick := range ticker.C {
@@ -188,13 +188,26 @@ func (ats *AirthreatSimulator) connectTCPServer() {
 		return
 	}
 
-	conn, err := net.Dial("tcp", "127.0.0.1:8000")
-	if err != nil {
-	 	log.Println("서버에 연결할 수 없습니다.", err)
-	 } else {
-	 	fmt.Println("서버에 연결되었습니다.")
-		ats.conn = conn
-	 }
+	const timeout = 1 * time.Minute
+	deadline := time.Now().Add(timeout)
+
+	for tries := 0; time.Now().Before(deadline); tries++ {
+		conn, err := net.Dial("tcp", "127.0.0.1:8000")
+
+		if err != nil {
+		 	log.Println("서버에 연결할 수 없습니다. (%s): %d차 재시도합니다.", err, tries)
+		 	time.Sleep(time.Second << uint(tries))
+		 } else {
+		 	fmt.Println("서버에 연결되었습니다.")
+			ats.conn = conn
+
+			return
+		 }
+	}
+
+	if ats.conn == nil {
+		fmt.Println("서버 연결에 실패했습니다.")
+	}
 }
 
 
